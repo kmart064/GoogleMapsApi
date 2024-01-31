@@ -4,7 +4,7 @@ This is a project for utilizing various APIs from GoogleMaps to locate any desir
 
 ## Installation
 
-Note: a portable, zipped project is available in the repository for immediate use. If you'd prefer to install it manually, please follow the directions below.
+Note: a portable, zipped project is available in the Releases section for immediate use. Just extract and launch index.html with a development server. If you'd prefer to install it manually, please follow the directions below.
 
 1. Download the files from this repo into an empty folder of your choice.
 2. You will need to download the DefinitelyTyped project to the directory you chose in step 1.
