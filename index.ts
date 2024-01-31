@@ -27,16 +27,10 @@ async function initMap(): Promise<void> {
     document.getElementById('map') as HTMLElement,
     {
       zoom: 14,
+			center: { lat: 35.6764, lng: 139.7600 }, //Tokyo
       mapId: 'DEMO_MAP_ID',
     }
   );
-
-  var request = {
-		query: 'restaurant',
-		fields: ['geometry', 'place_id'],
-  };
-
-	await findPlaces(request);
 }
 
 /**
@@ -138,7 +132,7 @@ function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.
     else {
       priceLevel = PriceLevel.Unknown;
     }
-		priceLevelElement.textContent = "Price level: " + PriceLevel[priceLevel];
+		priceLevelElement.textContent = "Price level: " + PriceLevel[priceLevel].replace("_"," ");
 		content.appendChild(priceLevelElement);
 
 		var directionsButton = document.createElement("button");
@@ -203,8 +197,10 @@ document.getElementById('filter').onclick = () => {
     default:
       price = null;
   }
+
+	let userQuery = (<HTMLSelectElement>document.getElementById('search')).value;
   var request = {
-    query: 'restaurant',
+    query: userQuery,
     fields: ['geometry', 'place_id', 'price_level'],
   };
   findPlaces(request, price);
@@ -247,5 +243,14 @@ function handleLocationError(browserHasGeolocation, infoWindow, pos) {
   );
   infoWindow.open(map);
 }
+
+document.getElementById('submit').onclick = () => {
+  let userQuery = (<HTMLSelectElement>document.getElementById('search')).value;
+  var request = {
+    query: userQuery,
+    fields: ['geometry', 'place_id', 'price_level'],
+  };
+  findPlaces(request);
+};
 
 initMap();
