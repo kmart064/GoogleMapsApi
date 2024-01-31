@@ -219,6 +219,11 @@ document.getElementById('filter').onclick = () => {
 async function getDirectionsToPlace(sourceLoc: LocLatLng, destPlaceId: string, travelChoice: google.maps.TravelMode = google.maps.TravelMode.DRIVING) {
   var latLng = new google.maps.LatLng(sourceLoc.lat, sourceLoc.lng);
   directionsRenderer.setMap(map);
+	directionsRenderer.setPanel(
+    document.getElementById("sidebar") as HTMLElement
+  );
+  const control = document.getElementById("floating-panel") as HTMLElement;
+  map.controls[google.maps.ControlPosition.TOP_CENTER].push(control);
   directionsService
     .route({
       origin: latLng,
