@@ -12,17 +12,12 @@ enum PriceLevel {
 async function initMap(): Promise<void> {
   // Request needed libraries.
   const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
-  const { PlacesService } = await google.maps.importLibrary("places") as google.maps.PlacesLibrary;
   infoWindow = new google.maps.InfoWindow();
-
-	// The location of Uluru
-  const position = { lat: -25.344, lng: 131.031 };
 
 	map = new Map(
     document.getElementById('map') as HTMLElement,
     {
       zoom: 14,
-      center: position,
       mapId: 'DEMO_MAP_ID',
     }
   );
@@ -32,13 +27,35 @@ async function initMap(): Promise<void> {
 		fields: ['geometry', 'place_id'],
   };
 
-  let service = new PlacesService(map);
+	await findPlaces(request);
+}
+
+/**
+ * Retrieves detailed location information (name, phone number, website, etc.)
+ * from the provided PlacesAPI TextSearchRequest. Will also filter the results
+ * if a PriceLevel is provided, otherwise all possible locations will be shown.
+ * @param req The TextSearchRequest which should have a query parameter and the
+ * 	geometry and place_id fields.
+ * @param priceLevel Optional. Will filter the results by price_level if 
+ * 	provided.
+ */
+async function findPlaces(req: google.maps.places.TextSearchRequest, priceLevel?: PriceLevel) {
+	const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
+	const { PlacesService } = await google.maps.importLibrary("places") as google.maps.PlacesLibrary;
+
+	// reset the map upon a new search
+	map = new Map(
+    document.getElementById('map') as HTMLElement,
+    {
+      zoom: 14,
+      mapId: 'DEMO_MAP_ID',
+    }
+  );
+
+	let service = new PlacesService(map);
 	const textSearchPromise = new Promise((resolve, reject) => {
-		service.textSearch(request, function(results, status) {
+		service.textSearch(req, function(results, status) {
 			if (status === google.maps.places.PlacesServiceStatus.OK) {
-				for (var i = 0; i < results.length; i++) {
-					createMarker(results[i], infoWindow);
-				}
 				map.setCenter(results[0].geometry.location);
 				resolve(results);
 			}
@@ -49,15 +66,19 @@ async function initMap(): Promise<void> {
 	});
 	textSearchPromise.then((res: google.maps.places.PlaceResult[]) => {
     for (let i = 0; i < res.length; i++) {
-      var request = {
+      // Use the placeIds to get the detailed location information
+			var request = {
         placeId: res[i].place_id,
         fields: ['name', 'formatted_address', 'formatted_phone_number', 'website', 'price_level', 'geometry', 'place_id'],
       };
-      service.getDetails(request, function(result, status) {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          createMarker(result, infoWindow);
-        }
-      });
+      // if the price filter is set, only show places that match the price level
+			if (priceLevel == null || priceLevel == res[i].price_level) {
+				service.getDetails(request, function(result, status) {
+					if (status === google.maps.places.PlacesServiceStatus.OK) {
+						createMarker(result, infoWindow);
+					}
+				});
+			}
     }
   }, (error) => {
 		alert(error);
@@ -118,5 +139,35 @@ function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.
 	  });
 	});
 }
+
+// Adds a listener which sends a TextSearchRequest to the Places API with the selected priceLevel
+document.getElementById('filter').onclick = () => {
+  let priceLevel = (<HTMLSelectElement>document.getElementById('priceLevel')).value;
+  var price;
+  switch (priceLevel) {
+    case ('free'):
+      price = PriceLevel.Free;
+      break;
+    case ('inexpensive'):
+      price = PriceLevel.Inexpensive;
+      break;
+    case ('moderate'):
+      price = PriceLevel.Moderate;
+      break;
+    case ('expensive'):
+      price = PriceLevel.Expensive;
+      break;
+    case ('very_expensive'):
+      price = PriceLevel.Very_Expensive;
+      break;
+    default:
+      price = null;
+  }
+  var request = {
+    query: 'restaurant',
+    fields: ['geometry', 'place_id', 'price_level'],
+  };
+  findPlaces(request, price);
+};
 
 initMap();
