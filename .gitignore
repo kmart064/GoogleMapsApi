@@ -23,6 +23,7 @@ creds.js
 
 # Private Files
 *.json
+!tsconfig.json
 *.csv
 *.csv.gz
 *.tsv
