@@ -1,5 +1,7 @@
 let infoWindow: google.maps.InfoWindow;
 let map: google.maps.Map;
+let directionsRenderer: google.maps.DirectionsRenderer;
+let directionsService: google.maps.DirectionsService;
 enum PriceLevel {
   Free = 0,
   Inexpensive,
@@ -8,11 +10,18 @@ enum PriceLevel {
   Very_Expensive,
   Unknown
 }
+interface LocLatLng {
+  lat: number
+  lng: number
+};
 
 async function initMap(): Promise<void> {
   // Request needed libraries.
   const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
+	const { DirectionsService, DirectionsRenderer } = await google.maps.importLibrary("routes") as google.maps.RoutesLibrary;
   infoWindow = new google.maps.InfoWindow();
+	directionsRenderer = new DirectionsRenderer();
+  directionsService = new DirectionsService();
 
 	map = new Map(
     document.getElementById('map') as HTMLElement,
@@ -131,6 +140,37 @@ function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.
     }
 		priceLevelElement.textContent = "Price level: " + PriceLevel[priceLevel];
 		content.appendChild(priceLevelElement);
+
+		var directionsButton = document.createElement("button");
+    directionsButton.innerHTML = 'Directions';
+    directionsButton.onclick = function()
+    {
+      // Use HTML5 Geolocation API to get the user's current location as the starting point
+			const findCurrentLocationPromise = new Promise((resolve, reject) => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const pos: LocLatLng = {
+								lat: position.coords.latitude,
+								lng: position.coords.longitude
+							}
+              resolve(pos);
+            },
+            () => {
+              handleLocationError(true, infoWindow, map.getCenter());
+            },
+          )
+        }
+        else {
+          // Browser doesn't support Geolocation
+          handleLocationError(false, infoWindow, map.getCenter());
+        }
+			});
+      findCurrentLocationPromise.then((res: LocLatLng) => {
+        getDirectionsToPlace(res, place.place_id);
+      });
+    }
+		content.appendChild(directionsButton);
     
     infoWindow.setContent(content);
 	  infoWindow.open({
@@ -169,5 +209,38 @@ document.getElementById('filter').onclick = () => {
   };
   findPlaces(request, price);
 };
+
+/**
+ * Draws a route from the given source and destination on the map.
+ * @param sourceLoc Must contain the latitude and longitude values for
+ * 	the starting point using the LocLatLng interface
+ * @param destPlaceId Must be a place_id string for the destination
+ */
+async function getDirectionsToPlace(sourceLoc: LocLatLng, destPlaceId: string, travelChoice: google.maps.TravelMode = google.maps.TravelMode.DRIVING) {
+  var latLng = new google.maps.LatLng(sourceLoc.lat, sourceLoc.lng);
+  directionsRenderer.setMap(map);
+  directionsService
+    .route({
+      origin: latLng,
+      destination: {
+        placeId: destPlaceId,
+      },
+      travelMode: travelChoice,
+    })
+    .then((response) => {
+      directionsRenderer.setDirections(response);
+    })
+    .catch((e) => window.alert(e));
+}
+
+function handleLocationError(browserHasGeolocation, infoWindow, pos) {
+  infoWindow.setPosition(pos);
+  infoWindow.setContent(
+    browserHasGeolocation
+      ? "Error: The Geolocation service failed."
+      : "Error: Your browser doesn't support geolocation.",
+  );
+  infoWindow.open(map);
+}
 
 initMap();
