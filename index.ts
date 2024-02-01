@@ -1,19 +1,20 @@
+import { restaurantTypes } from "./restaurantTypes.js";
 let infoWindow: google.maps.InfoWindow;
 let map: google.maps.Map;
 let directionsRenderer: google.maps.DirectionsRenderer;
 let directionsService: google.maps.DirectionsService;
-enum PriceLevel {
-  Free = 0,
-  Inexpensive,
-  Moderate,
-  Expensive,
-  Very_Expensive,
-  Unknown
-}
 interface LocLatLng {
   lat: number
   lng: number
 };
+interface PlacesQuery {
+  query: string
+  responseMask: string
+}
+var placesResponse; // memory storage of the results of the most recent search query
+let markerMap = new Map<string, google.maps.marker.AdvancedMarkerElement>(); // memory storage mapping of placeId's to map markers
+
+const RESPONSE_MASK = "places.displayName.text,places.formatted_address,places.primaryType,places.nationalPhoneNumber,places.websiteUri,places.location,places.id"
 
 async function initMap(): Promise<void> {
   // Request needed libraries.
@@ -34,19 +35,15 @@ async function initMap(): Promise<void> {
 }
 
 /**
- * Retrieves detailed location information (name, phone number, website, etc.)
- * from the provided PlacesAPI TextSearchRequest. Will also filter the results
- * if a PriceLevel is provided, otherwise all possible locations will be shown.
- * @param req The TextSearchRequest which should have a query parameter and the
- * 	geometry and place_id fields.
- * @param priceLevel Optional. Will filter the results by price_level if 
- * 	provided.
+ * Retrieves detailed location information (name, phone number, website, etc.) from 
+ * the provided PlacesQuery, and places a Marker at each of these locations on the map.
+ * @param req The PlacesQuery which should have a query parameter and the
+ * 	desired response fields.
  */
-async function findPlaces(req: google.maps.places.TextSearchRequest, priceLevel?: PriceLevel) {
+async function findPlaces(req: PlacesQuery) {
 	const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
-	const { PlacesService } = await google.maps.importLibrary("places") as google.maps.PlacesLibrary;
 
-	// reset the map upon a new search
+	// reset the map and marker map upon a new search
 	map = new Map(
     document.getElementById('map') as HTMLElement,
     {
@@ -54,38 +51,42 @@ async function findPlaces(req: google.maps.places.TextSearchRequest, priceLevel?
       mapId: 'DEMO_MAP_ID',
     }
   );
+  markerMap.clear();
+ 
+  placesResponse = await textSearchPlaces(req);
 
-	let service = new PlacesService(map);
-	const textSearchPromise = new Promise((resolve, reject) => {
-		service.textSearch(req, function(results, status) {
-			if (status === google.maps.places.PlacesServiceStatus.OK) {
-				map.setCenter(results[0].geometry.location);
-				resolve(results);
-			}
-			else {
-				reject("The call to the PlacesAPI textSearch failed with code: " + status);
-			}
-		});
-	});
-	textSearchPromise.then((res: google.maps.places.PlaceResult[]) => {
-    for (let i = 0; i < res.length; i++) {
-      // Use the placeIds to get the detailed location information
-			var request = {
-        placeId: res[i].place_id,
-        fields: ['name', 'formatted_address', 'formatted_phone_number', 'website', 'price_level', 'geometry', 'place_id'],
-      };
-      // if the price filter is set, only show places that match the price level
-			if (priceLevel == null || priceLevel == res[i].price_level) {
-				service.getDetails(request, function(result, status) {
-					if (status === google.maps.places.PlacesServiceStatus.OK) {
-						createMarker(result, infoWindow);
-					}
-				});
-			}
-    }
-  }, (error) => {
-		alert(error);
-	});
+  // Mark the places on the map
+  for (const place of placesResponse.places) {
+    createMarker(place, infoWindow);
+  }
+  map.setCenter(new google.maps.LatLng(placesResponse.places[0].location.latitude, placesResponse.places[0].location.longitude));
+}
+
+/**
+ * Sends a POST request to the Google Places API (new) textSearch
+ * endpoint.
+ * @param req The PlacesQuery which should have a query parameter and the
+ * 	desired response fields.
+ */
+async function textSearchPlaces(req: PlacesQuery): Promise<string> {
+  let endpoint = 'https://places.googleapis.com/v1/places:searchText'; 
+  let data = { "textQuery": req.query };
+  try {
+    const request = await fetch(endpoint, { 
+      method: "POST", 
+      body: JSON.stringify(data),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": "AIzaSyCYtLFv-zDLUhBWy-whiBQx0WFlot_6dts",
+        "X-Goog-FieldMask": req.responseMask
+      },
+    });
+    
+    const response = await request.json();
+    return response;
+  } catch (error) {
+    alert(error);
+  }
 }
 
 /**
@@ -97,43 +98,39 @@ async function findPlaces(req: google.maps.places.TextSearchRequest, priceLevel?
  * 	for a specific place, which should contain at least the name,
  * 	placeId, formatted address, and geometry.
  */
-function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.maps.InfoWindow) {
-	if (!place.geometry || !place.geometry.location) return;
+async function createMarker(place, infoWindow: google.maps.InfoWindow) {
+	const { AdvancedMarkerElement } = await google.maps.importLibrary("marker") as google.maps.MarkerLibrary;
+  if (!place.location) return;
   
-	const marker = new google.maps.Marker({
+	const marker = new AdvancedMarkerElement({
 	  map,
-	  position: place.geometry.location,
+	  position: new google.maps.LatLng(place.location.latitude, place.location.longitude),
 	});
+  // Add the marker to the marker map
+  markerMap.set(place.id, marker);
   
 	google.maps.event.addListener(marker, "click", () => {
 	  const content = document.createElement("div");
 
     const nameElement = document.createElement("h2");
-    nameElement.textContent = place.name;
+    nameElement.textContent = place.displayName.text;
     content.appendChild(nameElement);
 
     const placeAddressElement = document.createElement("p");
-    placeAddressElement.textContent = place.formatted_address;
+    placeAddressElement.textContent = place.formattedAddress;
     content.appendChild(placeAddressElement);
 		
 		const phoneNumberElement = document.createElement("p");
-    phoneNumberElement.textContent = place.formatted_phone_number;
+    phoneNumberElement.textContent = place.nationalPhoneNumber;
     content.appendChild(phoneNumberElement);
 
     const websiteElement = document.createElement("p");
-    websiteElement.textContent = place.website;
+    websiteElement.textContent = place.websiteUri;
     content.appendChild(websiteElement);
 
-    const priceLevelElement = document.createElement("p");
-    let priceLevel: PriceLevel;
-    if (place.price_level) {
-      priceLevel = place.price_level;
-    }
-    else {
-      priceLevel = PriceLevel.Unknown;
-    }
-		priceLevelElement.textContent = "Price level: " + PriceLevel[priceLevel].replace("_"," ");
-		content.appendChild(priceLevelElement);
+    const primaryTypeElement = document.createElement("p");
+		primaryTypeElement.textContent = toTitleCase(place.primaryType.replaceAll("_"," "));
+		content.appendChild(primaryTypeElement);
 
 		var directionsButton = document.createElement("button");
     directionsButton.innerHTML = 'Directions';
@@ -161,7 +158,7 @@ function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.
         }
 			});
       findCurrentLocationPromise.then((res: LocLatLng) => {
-        getDirectionsToPlace(res, place.place_id);
+        getDirectionsToPlace(res, place.id);
       });
     }
 		content.appendChild(directionsButton);
@@ -174,36 +171,19 @@ function createMarker(place: google.maps.places.PlaceResult, infoWindow: google.
 	});
 }
 
-// Adds a listener which sends a TextSearchRequest to the Places API with the selected priceLevel
+// Filters the current location results for the selected restaurant type
 document.getElementById('filter').onclick = () => {
-  let priceLevel = (<HTMLSelectElement>document.getElementById('priceLevel')).value;
-  var price;
-  switch (priceLevel) {
-    case ('free'):
-      price = PriceLevel.Free;
-      break;
-    case ('inexpensive'):
-      price = PriceLevel.Inexpensive;
-      break;
-    case ('moderate'):
-      price = PriceLevel.Moderate;
-      break;
-    case ('expensive'):
-      price = PriceLevel.Expensive;
-      break;
-    case ('very_expensive'):
-      price = PriceLevel.Very_Expensive;
-      break;
-    default:
-      price = null;
+  let restType = (<HTMLSelectElement>document.getElementById('restaurantType')).value;
+	for (const place of placesResponse.places) {
+    if (restType != restaurantTypes[restaurantTypes.all] && place.primaryType != restType) {
+      // hide the marker
+      markerMap.get(place.id).map = null;
+    }
+    else {
+      // show the marker
+      markerMap.get(place.id).map = map;
+    }
   }
-
-	let userQuery = (<HTMLSelectElement>document.getElementById('search')).value;
-  var request = {
-    query: userQuery,
-    fields: ['geometry', 'place_id', 'price_level'],
-  };
-  findPlaces(request, price);
 };
 
 /**
@@ -246,11 +226,20 @@ function handleLocationError(browserHasGeolocation, infoWindow, pos) {
 
 document.getElementById('submit').onclick = () => {
   let userQuery = (<HTMLSelectElement>document.getElementById('search')).value;
-  var request = {
+  const request: PlacesQuery = {
     query: userQuery,
-    fields: ['geometry', 'place_id', 'price_level'],
+    responseMask: RESPONSE_MASK,
   };
   findPlaces(request);
 };
+
+/**
+ * Capitalizes the first letter of each word in str
+ */
+function toTitleCase(str) {
+  return str.replace(/\w\S*/g, function(txt){
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+  });
+}
 
 initMap();

@@ -25,7 +25,7 @@ tsc
 
 When the page first loads, you should see the map centered near Tokyo, Japan, with no markers. You can then search for any kind of place or facility in the search box and click submit to find multiple relevant locations based on your query. You can click on any of the markers to bring up an info window with details about the location, such as the name, phone number, address, etc.
 
-You can also filter the locations by price level by selecting a desired level from the price dropdown and clicking filter. Finally, you can generate a route and directions to any of the markers by clicking the Directions button in the info window. You will be asked for permission to share your current location if you wish to receive directions, which is required for this application.
+You can also filter the locations by restaurant type by selecting the type from the restaurant type dropdown and clicking filter. Finally, you can generate a route and directions to any of the markers by clicking the directions button in the info window. You will be asked for permission to share your current location if you wish to receive directions, which is required for this application.
 
 ## License
 
