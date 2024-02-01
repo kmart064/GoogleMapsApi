@@ -14,7 +14,7 @@ interface PlacesQuery {
 var placesResponse; // memory storage of the results of the most recent search query
 let markerMap = new Map<string, google.maps.marker.AdvancedMarkerElement>(); // memory storage mapping of placeId's to map markers
 
-const RESPONSE_MASK = "places.displayName.text,places.formatted_address,places.primaryType,places.nationalPhoneNumber,places.websiteUri,places.location,places.id"
+const RESPONSE_MASK = "places.displayName.text,places.formatted_address,places.types,places.nationalPhoneNumber,places.websiteUri,places.location,places.id"
 
 async function initMap(): Promise<void> {
   // Request needed libraries.
@@ -96,7 +96,7 @@ async function textSearchPlaces(req: PlacesQuery): Promise<string> {
  * the name, address, and placeId for the place.
  * @param place A PlaceResult obtained from querying the PlacesAPI
  * 	for a specific place, which should contain at least the name,
- * 	placeId, formatted address, and geometry.
+ * 	placeId, formatted address, lat and lng.
  */
 async function createMarker(place, infoWindow: google.maps.InfoWindow) {
 	const { AdvancedMarkerElement } = await google.maps.importLibrary("marker") as google.maps.MarkerLibrary;
@@ -128,9 +128,9 @@ async function createMarker(place, infoWindow: google.maps.InfoWindow) {
     websiteElement.textContent = place.websiteUri;
     content.appendChild(websiteElement);
 
-    const primaryTypeElement = document.createElement("p");
-		primaryTypeElement.textContent = toTitleCase(place.primaryType.replaceAll("_"," "));
-		content.appendChild(primaryTypeElement);
+    const typesElement = document.createElement("p");
+		typesElement.textContent = toTitleCase(place.types.join(", ").replaceAll("_"," "));
+		content.appendChild(typesElement);
 
 		var directionsButton = document.createElement("button");
     directionsButton.innerHTML = 'Directions';
@@ -175,7 +175,15 @@ async function createMarker(place, infoWindow: google.maps.InfoWindow) {
 document.getElementById('filter').onclick = () => {
   let restType = (<HTMLSelectElement>document.getElementById('restaurantType')).value;
 	for (const place of placesResponse.places) {
-    if (restType != restaurantTypes[restaurantTypes.all] && place.primaryType != restType) {
+    let found = false;
+    for (const type of place.types) {
+      // if the selected restaurant type is all, or if one of the types matches the selected type, show the marker
+      if (restType == restaurantTypes[restaurantTypes.all] || type == restType) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
       // hide the marker
       markerMap.get(place.id).map = null;
     }
